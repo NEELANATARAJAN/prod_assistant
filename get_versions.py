@@ -1,5 +1,10 @@
 import importlib.metadata
-packages = ['langchain', 'langchain_core', 'python-dotenv']
+packages = [
+    'langchain', 
+    'langchain_core', 
+    'python-dotenv',
+    'streamlit'
+    ]
 for package in packages:
     try:
         version = importlib.metadata.version(package)
