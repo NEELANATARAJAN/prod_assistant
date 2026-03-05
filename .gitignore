@@ -10,3 +10,9 @@ wheels/
 .venv
 .env
 venv/
+
+# Logs
+.log
+.logs
+
+archive/
