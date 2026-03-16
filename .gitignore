@@ -8,11 +8,15 @@ wheels/
 
 # Virtual environments
 .venv
-.env
 venv/
+
+# Api keys and secrets
+.env
+*.env
 
 # Logs
 .log
 .logs
 
 archive/
+logs/

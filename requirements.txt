@@ -19,5 +19,6 @@ langgraph==1.0.10
 ragas==0.4.3
 langchain-mcp-adapters==0.2.1
 mcp==1.26.0
-ddgs==9.11.1
+ddgs>=9.0.0
 langchain-openai==1.1.10
+webdriver-manager
