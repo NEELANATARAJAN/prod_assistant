@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "prod-assistant"
 version = "0.1.0"
@@ -30,3 +34,16 @@ dependencies = [
     "uvicorn==0.41.0",
     "webdriver-manager>=4.0.2",
 ]
+
+# Optional: authors, license
+authors = [{ name = "Neela Natarajan"}]
+license = { text = "Proprietary"}
+
+# Optional: CLI command (python -m pip install -e . )
+[project.scripts]
+ecomm-prod_assistant = "prod_assistant.cli:main"
+
+# Mandatory: creating the source files as package
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["assistant*"]

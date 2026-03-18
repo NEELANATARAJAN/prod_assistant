@@ -22,3 +22,4 @@ mcp==1.26.0
 ddgs>=9.0.0
 langchain-openai==1.1.10
 webdriver-manager
+-e .

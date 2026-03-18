@@ -20,3 +20,6 @@ venv/
 
 archive/
 logs/
+
+# Egg-info files
+*.egg-info
