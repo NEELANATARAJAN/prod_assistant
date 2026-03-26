@@ -7,6 +7,7 @@ from assistant.utils.config_loader import load_config
 from assistant.utils.model_loader import ModelLoader
 from dotenv import load_dotenv
 from pathlib import Path
+import math
 
 project_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(project_root))
@@ -34,6 +35,30 @@ class Retriever:
         self.db_api_endpoint = os.getenv("ASTRA_DB_API_ENDPOINT")
         self.db_application_token = os.getenv("ASTRA_DB_APPLICATION_TOKEN")
         self.db_keyspace = os.getenv("ASTRA_DB_KEYSPACE")
+    
+    def _sanitize_value(self, value):
+        """ Replace nan/inf floats with None - JSON does not support them."""
+        if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+            return None
+        return value
+    
+    def _sanitize_metadata(self, metadata: dict) -> dict:
+        """ Sanitize all metadata values recursively. """
+        cleaned = {}
+        for key, value in metadata.items():
+            if isinstance(value, dict):
+                cleaned[key] = self._sanitize_metadata(value)
+            elif isinstance(value, list):
+                cleaned[key] = [self._sanitize_value(v) for v in value]
+            else:
+                cleaned[key] = self._sanitize_value(value)
+        return cleaned
+    
+    def _sanitize_docs(self, docs: list[Document]) -> list[Document]:
+        """Sanitize metadata for every retrieved document. """
+        for doc in docs:
+            doc.metadata = self._sanitize_metadata(doc.metadata or {})
+        return docs
 
     def load_retriever(self):
         """ Load Retriever for the Astra DB VectorStore """
