@@ -8,8 +8,9 @@ from assistant.utils.model_loader import ModelLoader
 from dotenv import load_dotenv
 from pathlib import Path
 import math
-from langchain_community.retrievers import ContextualCompressionRetriever
+from langchain_classic.retrievers import ContextualCompressionRetriever
 from langchain_classic.retrievers.document_compressors import LLMChainFilter
+from assistant.evaluation.ragas_evaluation import evaluate_context_precision, evaluate_response_relevancy
 
 
 project_root = Path(__file__).resolve().parents[2]
@@ -108,9 +109,36 @@ class Retriever:
         return output
 
 if __name__ == "__main__":
-    retriever_obj = Retriever()
     user_query = "can you suggest good budget laptop?"
-    results = retriever_obj.call_retriever(user_query)
+    retriever_obj = Retriever()
+    retrieved_docs = retriever_obj.call_retriever(user_query)
+    
+    def format_docs(docs) -> str:
+        if not docs:
+            return "No relevant documents found."
+        formatted_chunks = []
+        for d in docs:
+            meta = d.metadata or {}
+            formatted = (
+                f"Title: {meta.get('product_title', 'N/A')}\n"
+                f"Price: {meta.get('price', 'N/A')}\n"
+                f"Rating: {meta.get('rating', 'N/A')}\n"
+                f"Reviews:\n{d.page_content.strip()}"
+            )
+            formatted_chunks.append(formatted)
+        return "\n\n---\n\n".join(formatted_chunks)
+    
+    response="Dell Inspiron 15 Intel Core I5 13th production laptop with 16GB RAM and 512GB SSD is a good budget option with positive reviews highlighting its performance and value for money."
+    print(f"Retrieved_context: {retrieved_docs}")
+    retrieved_context = [format_docs([docs]) for docs in retrieved_docs]
 
-    for idx, doc in enumerate(results, 1):
+    for idx, doc in enumerate(retrieved_docs, 1):
         print(f"Result: {idx} : {doc.page_content}\nMetadata: {doc.metadata}\n")
+    
+    context_score=evaluate_context_precision(query=user_query, response=response, retrieved_context=retrieved_context)
+    relevancy_score=evaluate_response_relevancy(query=user_query, response=response, retrieved_context=retrieved_context)
+
+    print("\n----- Evaluatio Metrics -----")
+    print(f"Context Precision Score: {context_score}")
+    print(f"Response Relevancy Score: {relevancy_score}")
+
