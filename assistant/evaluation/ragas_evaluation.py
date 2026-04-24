@@ -48,7 +48,7 @@ def evaluate_response_relevancy(query, response, retrieved_context):
 
         async def main():
             llm = model_loader.load_evaluator_llm()
-            embedding_model = model_loader.load_embeddings()
+            embedding_model = model_loader.load_evaluator_embeddings()
             evaluator_llm = LangchainLLMWrapper(llm)
             evaluator_embeddings = LangchainEmbeddingsWrapper(embedding_model)
             scorer = ResponseRelevancy(llm=evaluator_llm, embedding_model=evaluator_embeddings)
