@@ -25,6 +25,7 @@ def evaluate_context_precision(query, response, retrieved_context):
             user_input=query,
             response=response,
             retrieved_contexts=retrieved_context
+            # retrieved_contexts=[doc.page_content for doc in retrieved_context]
         )
         async def main():
             context_precision=LLMContextPrecisionWithoutReference(llm=evaluator_llm)
@@ -49,6 +50,7 @@ def evaluate_response_relevancy(query, response, retrieved_context):
             user_input=query,
             response=response,
             retrieved_contexts=retrieved_context
+            # retrieved_contexts=[doc.page_content for doc in retrieved_context]
         )
 
         async def main():

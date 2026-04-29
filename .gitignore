@@ -23,3 +23,13 @@ logs/
 
 # Egg-info files
 *.egg-info
+
+
+data
+*.csv
+
+uv.lock
+.DS_Store
+product_reviews.csv
+data/product_reviews.csv
+uv.lock

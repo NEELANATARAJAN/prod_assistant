@@ -35,9 +35,11 @@ def format_docs(docs) -> str:
 def build_chain(query):
     """ Build the RAG pipeline chain with Retriever, prompt, LLM and parser."""
     retriever=retriever_obj.load_retriever()
-    # retrieved_docs=retriever.invoke(query)
+    retrieved_docs=retriever.invoke(query)
 
     # retrieved_context=[format_docs(retrieved_docs)]
+
+    retrieved_contexts = [format_docs(retrieved_docs)]
 
     llm = model_loader.load_llm()
     prompt = ChatPromptTemplate.from_template(
@@ -50,8 +52,8 @@ def build_chain(query):
         | llm
         | StrOutputParser()
     )
-    retrieved_context = retriever.invoke(query)
-    return chain, retrieved_context
+    # retrieved_context = retriever.invoke(query)
+    return chain, retrieved_contexts
 
 def invoke_chain(query: str, debug: bool = False):
     """ Run the chain with a user query."""
