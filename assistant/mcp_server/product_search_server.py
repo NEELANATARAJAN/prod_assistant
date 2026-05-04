@@ -20,13 +20,14 @@ def format_docs(docs):
     formatted_chunks = []
     for d in docs:
         meta = d.metadata
-        formatted = (
-            f"Title: {meta.get('title', 'N/A')}\n"
-            f"Price: {meta.get('price', 'N/A')}\n"
-            f"Rating: {meta.get('rating', 'N/A')}\n"
-            f"Review: {d.page_content.strip()}\n"
-        )
-        formatted_chunks.append(formatted)
+        if meta:
+            formatted = (
+               f"Title: {meta.get('title', 'N/A')}\n"
+                f"Price: {meta.get('price', 'N/A')}\n"
+                f"Rating: {meta.get('rating', 'N/A')}\n"
+                f"Review: {d.page_content.strip()}\n"
+            )
+            formatted_chunks.append(formatted)
     return "\n---\n".join(formatted_chunks)
 
 # ----- MCP Endpoints ----- #
@@ -37,7 +38,7 @@ async def get_product_info(query: str) -> str:
     try:
         docs = retriever.invoke(query)
         context = format_docs(docs)
-        if not context.strip():
+        if context.strip() or "N/A" in context:
             return "No local results found."
         return context
     except Exception as e:

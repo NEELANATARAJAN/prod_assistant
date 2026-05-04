@@ -20,10 +20,10 @@ async def main():
     web_search_tool = next(t for t in tools if t.name == "web_search")
 
     # --- Step 1: Try Vector Search --- #
-    query = "Samsung Galaxy S25 price"
+    query = "windows surface price and specifications"
     retriever_result = await retriever_tool.ainvoke({"query": query})
     retriever_text = "\n".join(block["text"] for block in retriever_result if block.get("type") == "text")
-    print("\n--- Retriever Result ---\n", retriever_result)
+    print("\n--- Retriever Result ---\n", retriever_text)
 
     # --- Step 2: Fallback to Web Search if Retriever fails --- #
     if not retriever_text.strip() or "No local results found." in retriever_text:
