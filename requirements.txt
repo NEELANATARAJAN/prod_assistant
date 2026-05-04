@@ -27,4 +27,5 @@ tavily-python==0.7.23
 ragas==0.4.3
 grpcio
 nest_asyncio
+
 -e .
