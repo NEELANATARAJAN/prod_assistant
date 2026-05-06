@@ -6,7 +6,7 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langgraph.checkpoint.memory import MemorySaver
 
-from prompt_library.prompts import PROMPT_REGISTRY, PromptType
+from assistant.prompt_library.prompts import PROMPT_REGISTRY, PromptType
 from assistant.retriever.retrieval import Retriever
 from assistant.utils.model_loader import ModelLoader
 from assistant.evaluation.ragas_evaluation import evaluate_context_precision, evaluate_response_relevancy
@@ -207,8 +207,10 @@ class AgenticRAG:
 if __name__ == "__main__":
     
     async def main():
-        rag_agent = AgenticRAG.create() # use async factory method to ensure MCP tools are loaded before workflow is built
-        answer = await rag_agent.run("What is the price of iphone 15?")
+        rag_agent = await AgenticRAG.create() # use async factory method to ensure MCP tools are loaded before workflow is built
+        answer = await rag_agent.run("What is the reviews of iphone 17?")
         print("\nFinal Answer:", answer)
     
     asyncio.run(main())
+
+# Final Answer: The provided text doesn't specifically mention the "iPhone 17" or its reviews. It appears to be a general discussion about iPhones, their features, and the abundance of reviews available online. If you're looking for reviews of a specific iPhone model, I'd be happy to help you find them. However, I couldn't find any information on an "iPhone 17" in the given context.

@@ -1,6 +1,13 @@
 from mcp.server.fastmcp import FastMCP
 from assistant.retriever.retrieval import Retriever
 from langchain_community.tools import DuckDuckGoSearchRun
+import os
+from langchain_community.tools.tavily_search import TavilySearchResults
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+os.environ["TAVILY_API_KEY"] = os.getenv("TAVILY_API_KEY")
 
 # Initialize MCP server
 mcp = FastMCP("hybrid_search")
@@ -11,6 +18,7 @@ retriever = retriever_obj.load_retriever()
 
 # LangChain DuckDuckGo Search Tool
 duckduckgo = DuckDuckGoSearchRun()
+tavilysearch = TavilySearchResults(max_results=3, tavily_api_key=os.getenv("TAVILY_API_KEY"))
 
 # ----- Helper functions ----- #
 def format_docs(docs):
@@ -46,9 +54,14 @@ async def get_product_info(query: str) -> str:
     
 @mcp.tool()
 async def web_search(query: str) -> str:
-    """ Search the web for additional product information using DuckDuckGo."""
+    """ Search the web for additional product information using TavilySearch."""
     try:
-        return duckduckgo.run(query)
+        results =  tavilysearch.invoke({"query": query})
+        
+        web_context = "\n\n".join(
+            f"Source: {res['url']}\n{res['content']}" for res in results
+        )
+        return web_context or "No web results found."
     except Exception as e:
         return f"Error performing web search: {str(e)}"
 

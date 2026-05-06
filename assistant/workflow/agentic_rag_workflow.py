@@ -259,9 +259,9 @@ class AgenticRAG:
 # ---------- Run ----------
 if __name__ == "__main__":
     rag=AgenticRAG()
-    result = rag.run("What is the review of samsung s25?")
+    result = rag.run("What is the reviews of iphone 17?")
     print("\nFinal Answer:\n", result)
-    user_query = "What is the review of samsung s25?"
+    user_query = "What is the reviews of iphone 17?"
     response, retrieved_context = rag.run_with_evaluation(user_query)
 
     context_score=evaluate_context_precision(query=user_query, response=response, retrieved_context=retrieved_context)
@@ -270,3 +270,6 @@ if __name__ == "__main__":
     print("\n----- Evaluatio Metrics -----")
     print(f"Context Precision Score: {context_score}")
     print(f"Response Relevancy Score: {relevancy_score}")
+
+# Final Answer:
+# The reviews of the iPhone 17 are overwhelmingly positive, with a rating of 4.6. Reviewers have mentioned that it's a "really good" phone, "much better compared to the previous one", and have praised the 120Hz display, with one reviewer using 😍😮 to express their excitement. Overall, the reviews suggest that it's a great purchase, with one reviewer simply saying "Go for it".
