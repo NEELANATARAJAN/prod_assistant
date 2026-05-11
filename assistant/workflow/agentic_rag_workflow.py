@@ -4,190 +4,171 @@ from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
+from langgraph.checkpoint.memory import MemorySaver
 
 from assistant.prompt_library.prompts import PROMPT_REGISTRY, PromptType
 from assistant.retriever.retrieval import Retriever
 from assistant.utils.model_loader import ModelLoader
-from langgraph.checkpoint.memory import MemorySaver
-import asyncio
-import os
-from langchain_community.tools.tavily_search import TavilySearchResults
 from assistant.evaluation.ragas_evaluation import evaluate_context_precision, evaluate_response_relevancy
-from IPython.display import Image
-
-
-retriever_obj=Retriever()
-model_loader=ModelLoader()
-llm=model_loader.load_llm()
+from langchain_mcp_adapters.client import MultiServerMCPClient
+import asyncio
 
 class AgenticRAG:
-    """Agentic RAG pipeline using LangGraph"""
+    """ Agentic RAG pipeline using LangGraph + MCP Tools (Retriever + Web Search)"""
 
-    # ---------- State Definition ----------
     class AgentState(TypedDict):
         messages: Annotated[Sequence[BaseMessage], add_messages]
-        documents: list
     
     def __init__(self):
+        """ Initialize components and build workflow graph."""
         self.retriever_obj = Retriever()
         self.model_loader = ModelLoader()
         self.llm = self.model_loader.load_llm()
-        self.workflow = self.build_workflow()
-        self.web_search_tool = TavilySearchResults(max_results=3, tavily_api_key=os.getenv("TAVILY_API_KEY"))
+        
+        # Tells the compiled workflow graph to save the state after every node execution in memory.
         self.checkpointer = MemorySaver()
-        self.app = self.workflow.compile(checkpointer=self.checkpointer)
-        #self.checkpointer = MemorySaver()
-        
-        
-        #self.app = self.workflow.compile(checkpointer=self.checkpointer)
 
+        # Initialize MCP tools
+        self.mcp_tools = []
 
-    # ---------- Helper for formatting ----------
-    def _format_docs(self, docs) -> str:
-        if not docs:
-            return "No relevant documents found."
-        formatted_chunks = []
-        for d in docs:
-            meta = d.metadata or {}
-            formatted = (
-                f"Title: {meta.get('product_title', 'N/A')}\n"
-                f"Price: {meta.get('price', 'N/A')}\n"
-                f"Rating: {meta.get('rating', 'N/A')}\n"
-                f"Reviews:\n{d.page_content.strip()}"
-            )
-            formatted_chunks.append(formatted)
-        return "\n\n---\n\n".join(formatted_chunks)
+        # Initialize workflow graph 
+        self.workflow = None
 
-    # ---------- Nodes ----------
+        # Initialize CompiledStateGraph app
+        self.app = None
+
+        # Initialize MCP client
+        self.mcp_client = MultiServerMCPClient({
+            "product_retriever": {
+                "command": "python",
+                "transport": "stdio",
+                "args": ["/Users/neeladnatarajan/DSProjects/LLMOps/hw/prod_assistant/assistant/mcp_server/product_search_server.py"],
+            }
+
+        })
+    
+    @classmethod
+    async def create(cls):
+        """ Async factory method to create an instance of AgenticRAG() directly.
+            Guarantees MCP tools are loaded before the workflow graph is built and app is compiled.
+        """
+        instance = cls() # runs __init__ MCP tools not loaded yet
+
+        # Step 1: Load MCP tools asynchronously 
+        try:
+
+            instance.mcp_tools = await instance.mcp_client.get_tools()
+            print("MCP Tools loaded: ", [t.name for t in instance.mcp_tools])
+        except Exception as e:
+            raise RuntimeError(f"Error loading MCP tools, workflow cannot be built. Error: {str(e)}")
+
+        # Step 2: Build workflow graph only after MCP tools are loaded
+        instance.workflow = instance._build_workflow()
+
+        # Step 3: Compile the workflow graph into an executable CompiledStateGraph which validates graph structure and 
+        # exposes invoke, ainvoke and stream functions
+        instance.app = instance.workflow.compile(checkpointer=instance.checkpointer)
+
+        return instance
+    
+    # ----- Nodes definition ----- #
     def _ai_assistant(self, state: AgentState):
-        """Decide whether to call retriever or just answer directly."""
-        print("--- CALL ASSITANT ---")
-        query = state["messages"][-1].content
+        print("--- CALL ASSISTANT ---")
+        messages = state["messages"]
+        last_message = messages[-1].content if messages else ""
 
-        # Simple routing: if query mentions product -> go retriever
-        if any(word in query.lower() for word in ['price', 'review', 'product']):
+        if any(word in last_message.lower() for word in ["price", "review", "product"]):
             return {"messages": [HumanMessage(content="TOOL: retriever")]}
         else:
-            # Direct answer without retriever
             prompt = ChatPromptTemplate.from_template(
-                "You are a helpful assistant. Answer the user directly.\n\nQuestions: {question}\nAnswer:"
+                "You are a helpful assistant. Answer the user's query directly.\n\nQuestion: {question}\n\nAnswer:"
             )
             chain = prompt | self.llm | StrOutputParser()
-            response = chain.invoke({"question": query})
+            response = chain.invoke({"question": last_message}) or "Sorry, I don't have an answer for that."
             return {"messages": [HumanMessage(content=response)]}
-
-    def _vector_retriever(self, state: AgentState):
-        """Fetch product info from vector DB."""
-        print("--- RETRIEVER ---")
-        query = state["messages"][0].content
-        retriever = self.retriever_obj.load_retriever()
-        docs = retriever.invoke(query)
-        # context = self._format_docs(docs)
-        return {"documents": docs}
     
-    def _web_search(self, state:AgentState):
-        print("--- WEB SEARCH ---")
-        question = state["messages"][0].content
+    async def _vector_retriever(self, state: AgentState):
+        print("--- CALL RETRIEVER (MCP) ---")
+        query = state["messages"][-1].content
 
-        # Run Web search
-        results = self.web_search_tool.invoke({"query":question})
-
-        # Format results into a single string
-        web_context = "\n\n".join(
-            f"Source: {r['url']}\n{r['content']}"
-            for r in results
-        )
-        return {"messages":[HumanMessage(content=web_context)]}
-
-    # def _grade_documents(self, state: AgentState) -> Literal["generator", "rewriter", "web_search"]:
-    #     """Grade docs relevance."""
-    #     print("--- GRADER ---")
-    #     question = state["messages"][0].content
-    #     docs = state["messages"][-1].content
-
-    #     prompt = PromptTemplate(
-    #         template="""You are a grader. Question: {question}\nDocs: {docs}\n
-    #         Are docs relevant to the question? Answer 'yes', 'no', or 'web_search' if the question needs current information. """,
-    #         input_variables=["question", "docs"],
-    #     )
-    #     chain = prompt | self.llm | StrOutputParser()
-    #     score = chain.invoke({"question":question, "docs": docs})
+        tool = next((t for t in self.mcp_tools if t.name == "get_product_info"), None)
+        if not tool:
+            return {"messages": [HumanMessage(content="Retriever tool not available in MCP tools.")]}
         
-    #     if "yes" in score.lower():
-    #         return "generator"
-    #     elif "web_search" in score.lower():
-    #         return "web_search"
-    #     else:
-    #         return "rewriter"
+        try:
+            result = await tool.ainvoke({"query": query})
+            context = result or "No relevant product data found."
+        except Exception as e:
+            context = f"Error invoking retriever tool: {str(e)}"
 
-    def _grade_documents(self, state: AgentState) -> Literal["generator", "rewriter", "web_search"]:
-        """Grade docs relevance."""
-        print("--- GRADER ---")
+        return {"messages": [HumanMessage(content=context)]}
+    
+
+    async def _web_search(self, state: AgentState):
+        """ Fallback web search using MCP Tool."""
+
+        print("--- CALL WEB SEARCH (MCP) ---")
+        query = state["messages"][-1].content
+        tool = next((t for t in self.mcp_tools if t.name == "web_search"), None)
+        context = await tool.ainvoke({"query": query}) if tool else "Web search tool not available."
+        return {"messages" : [HumanMessage(content=context)]}
+    
+    def _grade_documents(self, state: AgentState) -> Literal["generator", "rewriter"]:
+        """ Grade documents based on relevancy else rewrite the query for better retrieval."""
+
+        print("--- CALL GRADER ---")
         question = state["messages"][0].content
-        docs = state.get("documents", [])
-
-        if not docs:
-            print("No documents retrieved, defaulting to web search.")
-            return "web_search"
+        retrieved_context = state["messages"][-1].content
 
         prompt = PromptTemplate(
-            template=""" You are a document relevance grader.
-            Question: {question}
-            Document: {docs}
-            Does this document contain information relevant to the question?
-            Reply with ONE word only: yes or no
-            """, input_variables=["question", "docs"],
-        )    
+            template = """ You are a grader. Question: {question} \n Docs: {docs}\n Are docs relevant to the question?
+            Answer with "Yes" or "No".""",
+            input_variables=["question", "docs"],
+        )
         chain = prompt | self.llm | StrOutputParser()
-        relevant_docs = []
-        for doc in docs:
-            score = chain.invoke({
-                "question": question,
-                "docs": doc.page_content
-            })
-            print(f" score='{score.strip().lower()}' doc='{doc.page_content[:100]}...'")
-            if "yes" in score.strip().lower():
-                relevant_docs.append(doc)
-        if relevant_docs:
-            # Update documents with only relevant ones, format for generator
-            state["documents"] = relevant_docs
-            print(f"{len(relevant_docs)} relevant docs -> generator")
-            return "generator"
-        else:
-            # Docs were retrieved but not relevant -> web search
-            print("Docs irrelevant to question -> web search")
-            return "web_search"
-
+        score = chain.invoke({"question": question, "docs": retrieved_context}) or "no"
+        return "generator" if "yes" in score.lower() else "rewriter"
+    
     def _generate(self, state: AgentState):
-        """Generate final answer with docs."""
-        print("--- GENERATE ---")
-        question=state["messages"][0].content
-        docs=state.get("documents", [])
+        """ Generate final answer using retrieved context."""
 
-        # Use formatted docs if available, else fallback to last message (web search results)
-        if docs:
-            context = self._format_docs(docs)
-        else:
-            context = state["messages"][-1].content
+        print("--- CALL GENERATOR ---")
+        question = state["messages"][0].content
+        context = state["messages"][-1].content
 
         prompt = ChatPromptTemplate.from_template(
             PROMPT_REGISTRY[PromptType.PRODUCT_BOT].template
         )
         chain = prompt | self.llm | StrOutputParser()
-        response = chain.invoke({"context": context, "question": question})
-        return {"messages": [HumanMessage(content=response)]}
 
-    def _rewrite(self, state: AgentState):
-        """Rewrite bad query."""
-        print("--- REWRITE ---")
+        try:
+            answer = chain.invoke({"question": question, "context": context}) or "Sorry, I couldn't generate an answer."
+        except Exception as e:
+            answer = f"Error during generation: {str(e)}"
+        
+        return {"messages": [HumanMessage(content=answer)]}
+    
+    def _rewrite(self, state: AgentState) -> str:
+        """ Rewrite the query for better retrieval."""
+        
+        print("--- CALL REWRITER ---")
         question = state["messages"][0].content
-        new_q = self.llm.invoke(
-            [HumanMessage(content=f"Rewrite the query to be clearer: {question}")]
-        )
-        return {"messages": [HumanMessage(content=new_q.content)]}
 
-    # ---------- Build workflow ----------
-    def build_workflow(self):
+        prompt = ChatPromptTemplate.from_template(
+            "Rewrite this user query to make it more clear and specific for a search engine."
+            "Do NOT answer the query. Only rewrite it.\n\nOriginal Query: {question}\nRewritten Query:"
+        )
+        chain = prompt | self.llm | StrOutputParser()
+
+        try:
+            new_q = chain.invoke({"question": question}).strip()
+        except Exception as e:
+            new_q = f"Error during query rewriting: {str(e)}"
+        
+        return {"messages": [HumanMessage(content=new_q)]}
+    
+    # ----- Workflow graph ----- #
+    def _build_workflow(self):
         workflow = StateGraph(self.AgentState)
         workflow.add_node("Assistant", self._ai_assistant)
         workflow.add_node("Retriever", self._vector_retriever)
@@ -195,81 +176,41 @@ class AgenticRAG:
         workflow.add_node("Rewriter", self._rewrite)
         workflow.add_node("WebSearch", self._web_search)
 
-        # edges
+        # Workflow edges
         workflow.add_edge(START, "Assistant")
         workflow.add_conditional_edges(
-            "Assistant",
+            "Assistant", 
             lambda state: "Retriever" if "TOOL" in state["messages"][-1].content else END,
-            {"Retriever": "Retriever", END:END}
+            {"Retriever": "Retriever", END: END},
         )
         workflow.add_conditional_edges(
             "Retriever",
             self._grade_documents,
-            {
-                "generator": "Generator", 
-                "rewriter": "Rewriter",
-                "web_search": "WebSearch",
-            }
+            {"generator": "Generator", "rewriter": "Rewriter"},
         )
-        workflow.add_edge("WebSearch", "Generator")
         workflow.add_edge("Generator", END)
-        workflow.add_edge("Rewriter", "Assistant")
+        workflow.add_edge("Rewriter", "WebSearch")
+        workflow.add_edge("WebSearch", "Generator")
+
         return workflow
-
-        #app = workflow.compile()
     
-    def run(self, query: str, thread_id: str = "default_thread") -> str:
-            """Run the workflow for a given query and return the final answer."""
-            result = self.app.invoke({"messages": [HumanMessage(content=query)] },
-                                     config={"configurable": {"thread_id":thread_id}}
-                                     )
-            print(f"Full conversation history for thread {thread_id}:")
-            for msg in result["messages"]:
-                print(f"{msg.__class__.__name__}: {msg.content}")
-            print(self.app.get_graph().draw_mermaid())
-            return result["messages"][-1].content
-    
-    def run_with_evaluation(self, query: str, thread_id: str = "default_thread") -> tuple[str, list[str]]:
-        """Run the workflow and return both the final answer and retrieved context for evaluation.
-
-           Returns:
-                response (str): Final answer generated by the model.
-                retrieved_context (list[str]): page_content of each retrieved doc
-                                               (web_search content if DB missed) 
-        """
-        result = self.app.invoke(
+    # ----- Public Run ----- #
+    async def run(self, query: str, thread_id: str="default_thread") -> str:
+        """ Run the Agentic RAG workflow with MCP tools. """
+        result = await self.app.ainvoke(
             {"messages": [HumanMessage(content=query)]},
             config={"configurable": {"thread_id": thread_id}}
         )
-
-        response = result["messages"][-1].content
-        docs = result.get("documents", [])
-
-        if docs:
-            retrieved_context = [doc.page_content for doc in docs]
-            print(f"Length of Retrieved context from vector DB: {len(retrieved_context)}")
-        else:
-            retrieved_context = (
-                [result["messages"][-2].content] if len(result["messages"]) >= 2 else []
-            )
-            print(f"Length of Retrieved context from web search: {len(retrieved_context)}")
+        return result["messages"][-1].content if result and "messages" in result else "No response generated."
         
-        return response, retrieved_context
-
-# ---------- Run ----------
+# ----- Standalone Test ----- #
 if __name__ == "__main__":
-    rag=AgenticRAG()
-    result = rag.run("What is the reviews of iphone 17?")
-    print("\nFinal Answer:\n", result)
-    user_query = "What is the reviews of iphone 17?"
-    response, retrieved_context = rag.run_with_evaluation(user_query)
+    
+    async def main():
+        rag_agent = await AgenticRAG.create() # use async factory method to ensure MCP tools are loaded before workflow is built
+        answer = await rag_agent.run("What is the reviews of iphone 17?")
+        print("\nFinal Answer:", answer)
+    
+    asyncio.run(main())
 
-    context_score=evaluate_context_precision(query=user_query, response=response, retrieved_context=retrieved_context)
-    relevancy_score=evaluate_response_relevancy(query=user_query, response=response, retrieved_context=retrieved_context)
-
-    print("\n----- Evaluatio Metrics -----")
-    print(f"Context Precision Score: {context_score}")
-    print(f"Response Relevancy Score: {relevancy_score}")
-
-# Final Answer:
-# The reviews of the iPhone 17 are overwhelmingly positive, with a rating of 4.6. Reviewers have mentioned that it's a "really good" phone, "much better compared to the previous one", and have praised the 120Hz display, with one reviewer using 😍😮 to express their excitement. Overall, the reviews suggest that it's a great purchase, with one reviewer simply saying "Go for it".
+# Final Answer: The provided text doesn't specifically mention the "iPhone 17" or its reviews. It appears to be a general discussion about iPhones, their features, and the abundance of reviews available online. If you're looking for reviews of a specific iPhone model, I'd be happy to help you find them. However, I couldn't find any information on an "iPhone 17" in the given context.

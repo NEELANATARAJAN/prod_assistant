@@ -14,7 +14,7 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 import asyncio
 
 class AgenticRAG:
-    """ Agentic RAG pipeline using LangGraph + MCP Tools (Retriever + Web Search)"""
+    """ Agentic RAG pipeline using LangGraph + MCP Tools (Retriever + Web Search) - CRAG (Corrective RAG)"""
 
     class AgentState(TypedDict):
         messages: Annotated[Sequence[BaseMessage], add_messages]
