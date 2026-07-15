@@ -10,6 +10,7 @@ from pathlib import Path
 import math
 from langchain_classic.retrievers import ContextualCompressionRetriever
 from langchain_classic.retrievers.document_compressors import LLMChainFilter
+from langchain_core.prompts import PromptTemplate
 from assistant.evaluation.ragas_evaluation import evaluate_context_precision, evaluate_response_relevancy
 
 
@@ -24,7 +25,7 @@ class Retriever:
         self.config=load_config()
         self._load_env_variables()
         self.vstore=None
-        self.retriever=None
+        self.retriever_instance=None
 
     def _load_env_variables(self):
         """ Load env variables """
@@ -77,7 +78,7 @@ class Retriever:
                 namespace=self.db_keyspace,
             )
         
-        if not self.retriever:
+        if not self.retriever_instance:
             top_k = self.config["retriever"]["top_k"] if "retriever" in self.config else 3
             #retriever=self.vstore.as_retriever(search_kwargs={"k": top_k})
 
@@ -85,14 +86,33 @@ class Retriever:
                 search_type="mmr",
                 search_kwargs={"k": top_k,
                                "fetch_k": 20,
-                               "lambda_mult": 0.7,
-                               "score_threshold": 0.6
+                               "lambda_mult": 0.9,
+                               "score_threshold": 0.9
                                })
             print(f"Retriever loaded successfully")
 
             llm = self.model_loader.load_llm()
 
-            compressor = LLMChainFilter.from_llm(llm)
+            strict_prompt = PromptTemplate(
+                template="""You are a strict product relevance filter for an ecommerce search engine.
+
+                User Query: {question}
+                Product Document: {context}
+
+                Your job is to decide if this product document is SPECIFICALLY about the product the user asked for.
+
+                STRICT RULES:
+                - User asks for "iPhone 15" -> only YES for iPhone 15 documents. iPhone 16, iPhone17, Samsung = NO.
+                - User asks for "laptop" (generic, no brand/model) -> YES for any laptop document
+                - If the brand or model in the document does not match the query, answer NO.
+                - Do NOT answer YES just because the products are in same category.
+
+                Answer with only YES or NO. No explanation.
+                """, input_variables=["question", "context"]
+
+            )
+
+            compressor = LLMChainFilter.from_llm(llm, prompt=strict_prompt)
 
             self.retriever_instance = ContextualCompressionRetriever(
                 base_compressor=compressor,
@@ -100,16 +120,34 @@ class Retriever:
             )
 
             print(f"[load_retriever] Retriever loaded successfully")
-            return self.retriever_instance
+        return self.retriever_instance
 
     def call_retriever(self, query):
         """ Call retriever and invoke the query """
         retriever=self.load_retriever()
-        output=retriever.invoke(query)
-        return output
+        raw_docs = self.vstore.as_retriever(
+            search_type="mmr",
+            search_kwargs={"k": 3, "fetch_k": 20, "lambda_mult": 0.8}
+        ).invoke(query)
+        print(f"\n[DEBUG] Query: {query}")
+        print(f"\n[DEBUG] Raw MMR docs before compression ({len(raw_docs)})")
+
+        for i, doc in enumerate(raw_docs):
+            print(f"   [{i}] {doc.metadata.get('product_title','N/A')} | threshold may have excluded this")
+
+        compressed_docs = retriever.invoke(query)
+        print(f"[DEBUG] Compressed docs after LLMChainFilter ({len(compressed_docs)})")
+
+        for i, doc in enumerate(compressed_docs):
+            print(f"   [{i}] {doc.metadata.get('product_title', 'N/A')}")
+        
+        return compressed_docs
+
+        # output=retriever.invoke(query)
+        # return output
 
 if __name__ == "__main__":
-    user_query = "can you suggest good budget laptop?"
+    user_query = "what is iPhone 15 reviews and price?"
     retriever_obj = Retriever()
     retrieved_docs = retriever_obj.call_retriever(user_query)
     

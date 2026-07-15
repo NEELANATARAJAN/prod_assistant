@@ -6,11 +6,26 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from langchain_core.messages import HumanMessage
 
-from assistant.workflow.agentic_rag_workflow import AgenticRAG
+from contextlib import asynccontextmanager
 
-app=FastAPI()
+from assistant.workflow.agentic_rag_workflow_websearch import AgenticRAG
+
+rag_agent = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global rag_agent
+    rag_agent = await AgenticRAG.create() # await async factory
+    print("AgenticRAG initialized")
+    yield
+
+
+app=FastAPI(lifespan=lifespan)
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates=Jinja2Templates(directory="templates")
+
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -28,7 +43,6 @@ async def index(request: Request):
 @app.post("/get", response_class=HTMLResponse)
 async def chat(msg: str=Form(...)):
     """ Call the Agentic RAG workflow. """
-    rag_agent=AgenticRAG()
-    answer=rag_agent.run(msg)
+    answer = await rag_agent.run(msg)
     print(f"Agentic Response: {answer}")
     return answer

@@ -5,51 +5,74 @@ from dotenv import load_dotenv
 from assistant.utils.config_loader import load_config
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_groq import ChatGroq
+from langchain_openai import ChatOpenAI
 from assistant.logger import GLOBAL_LOGGER as log
 from assistant.exception.custom_exception import ProductAssistantException
 import asyncio
 
 
+# class ApiKeyManager:
+    # REQUIRED_KEYS = ["GROQ_API_KEY", "GOOGLE_API_KEY", "TAVILY_API_KEY", "OPENAI_API_KEY"]
+
+    # def __init__(self):
+    #     self.api_keys = {}
+    #     raw = os.getenv("API_KEYS")
+
+    #     if raw:
+    #         try:
+    #             parsed = json.loads(raw)
+    #             if not isinstance(parsed, dict):
+    #                 raise ValueError("API_KEYS is not a valid JSON object")
+    #             self.api_keys = parsed
+    #             log.info("Loaded API_KEYS from ECS secret")
+    #         except Exception as e:
+    #             log.warning("Failed to parse API_KEYS as JSON", error=str(e))
+
+    #     # Fallback to individual env vars
+    #     for key in self.REQUIRED_KEYS:
+    #         if not self.api_keys.get(key):
+    #             env_val = os.getenv(key)
+    #             if env_val:
+    #                 self.api_keys[key] = env_val
+    #                 log.info(f"Loaded {key} from individual env var")
+
+    #     # Final check
+    #     missing = [k for k in self.REQUIRED_KEYS if not self.api_keys.get(k)]
+    #     if missing:
+    #         log.error("Missing required API keys", missing_keys=missing)
+    #         raise ProductAssistantException("Missing API keys", sys)
+
+    #     log.info("API keys loaded", keys={k: v[:6] + "..." for k, v in self.api_keys.items()})
+
+
+    # def get(self, key: str) -> str:
+    #     val = self.api_keys.get(key)
+    #     if not val:
+    #         raise KeyError(f"API key for {key} is missing")
+    #     return val
+
+
 class ApiKeyManager:
-    REQUIRED_KEYS = ["GROQ_API_KEY", "GOOGLE_API_KEY", "TAVILY_API_KEY"]
-
     def __init__(self):
-        self.api_keys = {}
-        raw = os.getenv("API_KEYS")
+        self.api_keys = {
+            "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY"),
+            "GOOGLE_API_KEY": os.getenv("GOOGLE_API_KEY"),
+            "GROQ_API_KEY": os.getenv("GROQ_API_KEY"),
+            "ASTRA_DB_API_ENDPOINT": os.getenv("ASTRA_DB_API_ENDPOINT"),
+            "ASTRA_DB_APPLICATION_TOKEN": os.getenv("ASTRA_DB_APPLICATION_TOKEN"),
+            "ASTRA_DB_KEYSPACE": os.getenv("ASTRA_DB_KEYSPACE"),
+            "TAVILY_API_KEY": os.getenv("TAVILY_API_KEY")
+        }
 
-        if raw:
-            try:
-                parsed = json.loads(raw)
-                if not isinstance(parsed, dict):
-                    raise ValueError("API_KEYS is not a valid JSON object")
-                self.api_keys = parsed
-                log.info("Loaded API_KEYS from ECS secret")
-            except Exception as e:
-                log.warning("Failed to parse API_KEYS as JSON", error=str(e))
-
-        # Fallback to individual env vars
-        for key in self.REQUIRED_KEYS:
-            if not self.api_keys.get(key):
-                env_val = os.getenv(key)
-                if env_val:
-                    self.api_keys[key] = env_val
-                    log.info(f"Loaded {key} from individual env var")
-
-        # Final check
-        missing = [k for k in self.REQUIRED_KEYS if not self.api_keys.get(k)]
-        if missing:
-            log.error("Missing required API keys", missing_keys=missing)
-            raise ProductAssistantException("Missing API keys", sys)
-
-        log.info("API keys loaded", keys={k: v[:6] + "..." for k, v in self.api_keys.items()})
-
-
-    def get(self, key: str) -> str:
-        val = self.api_keys.get(key)
-        if not val:
-            raise KeyError(f"API key for {key} is missing")
-        return val
-
+        # Just log loaded keys
+        for key, val in self.api_keys.items():
+            if val:
+                log.info(f"{key} loaded from environment")
+            else:
+                log.warning(f"{key} is missing from environment")
+    
+    def get(self, key: str):
+        return self.api_keys.get(key)
 
 class ModelLoader:
     """
@@ -105,7 +128,7 @@ class ModelLoader:
         llm_config = llm_block[provider_key]
         provider = llm_config.get("provider")
         model_name = llm_config.get("model_name")
-        temperature = llm_config.get("temperature", 0.2)
+        temperature = llm_config.get("temperature", 0)
         max_tokens = llm_config.get("max_output_tokens", 2048)
 
         log.info("Loading LLM", provider=provider, model=model_name)
@@ -125,13 +148,13 @@ class ModelLoader:
                 temperature=temperature,
             )
 
-        # elif provider == "openai":
-        #     return ChatOpenAI(
-        #         model=model_name,
-        #         api_key=self.api_key_mgr.get("OPENAI_API_KEY"),
-        #         temperature=temperature,
-        #         max_tokens=max_tokens
-        #     )
+        elif provider == "openai":
+            return ChatOpenAI(
+                model=model_name,
+                api_key=self.api_key_mgr.get("OPENAI_API_KEY"),
+                temperature=temperature,
+                max_tokens=max_tokens
+            )
 
         else:
             log.error("Unsupported LLM provider", provider=provider)
@@ -151,7 +174,7 @@ class ModelLoader:
         llm_config = llm_block[provider_key]
         provider = llm_config.get("provider")
         model_name = llm_config.get("model_name")
-        temperature = llm_config.get("temperature", 0.2)
+        temperature = llm_config.get("temperature", 0)
         max_tokens = llm_config.get("max_output_tokens", 2048)
 
         log.info("Loading LLM", provider=provider, model=model_name)
@@ -171,13 +194,13 @@ class ModelLoader:
                 temperature=temperature,
             )
 
-        # elif provider == "openai":
-        #     return ChatOpenAI(
-        #         model=model_name,
-        #         api_key=self.api_key_mgr.get("OPENAI_API_KEY"),
-        #         temperature=temperature,
-        #         max_tokens=max_tokens
-        #     )
+        elif provider == "openai":
+            return ChatOpenAI(
+                model=model_name,
+                api_key=self.api_key_mgr.get("OPENAI_API_KEY"),
+                temperature=temperature,
+                max_tokens=max_tokens
+            )
 
         else:
             log.error("Unsupported LLM provider", provider=provider)

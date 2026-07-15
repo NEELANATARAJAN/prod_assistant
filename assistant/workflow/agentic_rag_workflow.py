@@ -125,10 +125,53 @@ class AgenticRAG:
             Answer with "Yes" or "No".""",
             input_variables=["question", "docs"],
         )
+
+        prompt = PromptTemplate(
+            template="""You are a strict relevance grader.
+            Question: {question}
+            Retrieved Context: {context}
+            Is the retrieved context SPECIFICALLY about the product mentioned in the question?
+            - If the question asks about "Windows Surface" but context is about "Dell Inspiron", answer "no"
+            
+            - Only answer "yes" if the context directly answers the question asked
+            Answer with only 'yes' or 'no'.""",
+            input_variables=["question", "context"]
+            )
         chain = prompt | self.llm | StrOutputParser()
         score = chain.invoke({"question": question, "docs": retrieved_context}) or "no"
         return "generator" if "yes" in score.lower() else "rewriter"
     
+    def _route_after_retrieval(self, state:AgentState) -> Literal["generator", "rewriter", "web_search"]:
+        """ Route after retrieval - skip grader if retrieval clearly failed. """
+        context = state["messages"][-1].content
+
+        # ByPass grader entirely if retrieval returned nothing useful
+        if not context.strip() or "No local results found." in context or "Error" in context:
+            print("Retrieval failed -> routing directly to web search")
+            return "web_search"
+        
+        # Grade retrieved docs for relevance
+        question = state["messages"][0].content
+        prompt = PromptTemplate(
+            template="""You are a strict relevance grader.
+
+            Question: {question}
+            Retrieved Context: {context}
+
+            Is the retrieved context SPECIFICALLY about the product mentioned in the question?
+            Only answer 'yes' if the context directly answers the question asked.
+            If the question asks about a different product than what is in the context, answer 'no'.
+
+            Answer with only 'yes' or 'no'.""",
+        input_variables=["question", "context"]
+    )
+        chain = prompt | self.llm | StrOutputParser()
+        score = chain.invoke({"question": question, "context": context}).strip().lower()
+        print(f"Relevance Score : {score}")
+        return "generator" if "yes" in score else "rewriter"
+
+
+
     def _generate(self, state: AgentState):
         """ Generate final answer using retrieved context."""
 
@@ -185,8 +228,10 @@ class AgenticRAG:
         )
         workflow.add_conditional_edges(
             "Retriever",
-            self._grade_documents,
-            {"generator": "Generator", "rewriter": "Rewriter"},
+            self._route_after_retrieval,
+            {"generator": "Generator", 
+             "rewriter": "Rewriter", 
+             "web_search":"WebSearch"},
         )
         workflow.add_edge("Generator", END)
         workflow.add_edge("Rewriter", "WebSearch")
