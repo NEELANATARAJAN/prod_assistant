@@ -176,7 +176,7 @@ Resources:
   Outputs:
     ECRRepositoryUri:
       Description: URI of the ECR Repository
-      Value: !GetAtt ProductAssistantECR.RepositoryUri
+      Value: !GetAtt ECRRepository.RepositoryUri
       Export:
         Name: ProductAssistant-ECR-Uri
     
