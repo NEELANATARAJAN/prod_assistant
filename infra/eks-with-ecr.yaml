@@ -157,6 +157,21 @@ Resources:
         - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
   
   ### ----- EKS NodeGroup -----
+  # NodeGroup:
+  #   Type: AWS::EKS::Nodegroup
+  #   DependsOn: EKSCluster
+  #   Properties:
+  #     ClusterName: !Ref ClusterName
+  #     NodeRole: !GetAtt NodeGroupRole.Arn
+  #     Subnets:
+  #       - !Ref PublicSubnet1
+  #       - !Ref PublicSubnet2
+  #     ScalingConfig:
+  #       DesiredSize: !Ref DesiredCapacity
+  #       MaxSize: 3
+  #       MinSize: 1
+  #     InstanceTypes:
+  #      - !Ref NodeInstanceType
   NodeGroup:
     Type: AWS::EKS::Nodegroup
     DependsOn: EKSCluster
@@ -170,13 +185,13 @@ Resources:
         DesiredSize: !Ref DesiredCapacity
         MaxSize: 3
         MinSize: 1
-      InstaceTypes:
-       - !Ref NodeInstanceType
+      InstanceTypes:
+        - !Ref NodeInstanceType
   
-  Outputs:
+Outputs:
     ECRRepositoryUri:
       Description: URI of the ECR Repository
-      Value: !GetAtt ECRRepository.RepositoryUri
+      Value: !GetAtt ProductAssistantECR.RepositoryUri
       Export:
         Name: ProductAssistant-ECR-Uri
     
