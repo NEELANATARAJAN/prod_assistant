@@ -41,7 +41,7 @@ spec:
                 name: product-assistant-secrets
                 key: ASTRA_DB_APPLICATION_TOKEN
           - name: ASTRA_DB_KEYSPACE
-            valueFrome:
+            valueFrom:
               secretKeyRef:
                 name: product-assistant-secrets
                 key: ASTRA_DB_KEYSPACE
