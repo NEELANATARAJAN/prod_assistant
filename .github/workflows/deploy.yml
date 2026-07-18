@@ -101,8 +101,8 @@ jobs:
       # Deploy manifests
       - name: Apply Kubernetes manifests
         run: |
-          kubectl apply -f assistant/k8/deployment.yaml
-          kubectl apply -f assistant/k8/service.yaml
+          kubectl apply -f k8/deployment.yaml
+          kubectl apply -f k8/service.yaml
       
       - name: Patch deployment with new image tag
         env:
