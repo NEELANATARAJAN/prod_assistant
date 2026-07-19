@@ -1,5 +1,8 @@
 import asyncio
+import os
 from langchain_mcp_adapters.client import MultiServerMCPClient
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+server_script_path = os.path.join(BASE_DIR, "product_search_server.py")
 
 async def main():
     # Initialize MCP client for the "hybrid_search" server
@@ -7,7 +10,8 @@ async def main():
         "hybrid_search": {
             "command": "python",
             "transport": "stdio",
-            "args": ["/Users/neeladnatarajan/DSProjects/LLMOps/hw/prod_assistant/assistant/mcp_server/product_search_server.py"]
+            # "args": ["/Users/neeladnatarajan/DSProjects/LLMOps/hw/prod_assistant/assistant/mcp_server/product_search_server.py"]
+            "args": [server_script_path]
         }
     })
 
