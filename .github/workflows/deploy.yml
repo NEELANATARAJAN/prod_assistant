@@ -39,6 +39,7 @@ jobs:
         id: image-tag
         run: |
           echo "IMAGE_TAG=$(date +%s)" >> $GITHUB_ENV
+          echo "tag=$(date +%s)" >> "$GITHUB_OUTPUT"
           echo "::set-output name=tag::$(date +%s)"
       
       # Build, tag and push Docker image to ECR
@@ -96,6 +97,7 @@ jobs:
             --from-literal=GOOGLE_API_KEY=${{ secrets.GOOGLE_API_KEY}} \
             --from-literal=ASTRA_DB_API_ENDPOINT=${{ secrets.ASTRA_DB_API_ENDPOINT }} \
             --from-literal=ASTRA_DB_APPLICATION_TOKEN=${{ secrets.ASTRA_DB_APPLICATION_TOKEN }} \
+            --from-literal=ASTRA_DB_KEYSPACE=${{ secrets.ASTRA_DB_KEYSPACE }} \
             --dry-run=client -o yaml | kubectl apply -f -
       
       # Deploy manifests
@@ -108,7 +110,7 @@ jobs:
         env:
           REGISTRY: ${{ secrets.ECR_REGISTRY }}
           REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-          IMAGE_TAG: ${{ secrets.image-tag.outputs.tag }}
+          IMAGE_TAG: ${{ steps.image-tag.outputs.tag }}
         run: |
           kubectl set image deployment/product-assistant product-assistant=$REGISTRY/$REPOSITORY:$IMAGE_TAG
       
