@@ -14,8 +14,10 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 import asyncio
 import os
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-server_script_path = os.path.join(BASE_DIR, "product_search_server.py")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+server_script_path = os.path.join(BASE_DIR, "mcp_server", "product_search_server.py")
+# server_script_path = os.path.join(BASE_DIR,"..", "mcp_server", "product_search_server.py")
+# server_script_path = os.path.normpath(server_script_path)
 
 class AgenticRAG:
     """ Agentic RAG pipeline using LangGraph + MCP Tools (Retriever + Web Search) - CRAG (Corrective RAG)"""
