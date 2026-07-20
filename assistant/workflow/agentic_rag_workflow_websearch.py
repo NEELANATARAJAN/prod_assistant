@@ -15,7 +15,8 @@ import asyncio
 import os
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-server_script_path = os.path.join(BASE_DIR, "mcp_server", "product_search_server.py")
+APP_ROOT = os.path.dirname(BASE_DIR)
+SERVER_PATH = os.path.join(BASE_DIR, "mcp_server", "product_search_server.py")
 # server_script_path = os.path.join(BASE_DIR,"..", "mcp_server", "product_search_server.py")
 # server_script_path = os.path.normpath(server_script_path)
 
@@ -51,7 +52,8 @@ class AgenticRAG:
                 "command": "python",
                 "transport": "stdio",
                 # "args": ["/Users/neeladnatarajan/DSProjects/LLMOps/hw/prod_assistant/assistant/mcp_server/product_search_server.py"],
-                "args": [server_script_path]
+                "args": [SERVER_PATH],
+                "env": {**os.environ, "PYTHONPATH": APP_ROOT}
             }
 
         })
