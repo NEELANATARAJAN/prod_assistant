@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
-os.environ["TAVILY_API_KEY"] = os.getenv("TAVILY_API_KEY")
+tavily_key = os.getenv("TAVILY_API_KEY")
 print(f"\n\nTAVILY API KEY: {os.getenv('TAVILY_API_KEY')}\n\n")
 
 # Initialize MCP server
@@ -21,6 +21,9 @@ retriever = retriever_obj.load_retriever()
 # LangChain DuckDuckGo Search Tool
 # duckduckgo = DuckDuckGoSearchRun()
 # tavilysearch = TavilySearchResults(max_results=3, tavily_api_key=os.getenv("TAVILY_API_KEY"))
+if not tavily_key:
+    raise RuntimeError("TAVILY_API_KEY is not set.")
+os.environ["TAVILY_API_KEY"] = os.getenv("TAVILY_API_KEY")
 web_search_tool = TavilySearch(max_results=5, tavily_api_key=os.getenv("TAVILY_API_KEY"))
 
 # ----- Helper functions ----- #

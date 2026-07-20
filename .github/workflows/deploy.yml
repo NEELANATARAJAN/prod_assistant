@@ -98,6 +98,7 @@ jobs:
             --from-literal=ASTRA_DB_API_ENDPOINT=${{ secrets.ASTRA_DB_API_ENDPOINT }} \
             --from-literal=ASTRA_DB_APPLICATION_TOKEN=${{ secrets.ASTRA_DB_APPLICATION_TOKEN }} \
             --from-literal=ASTRA_DB_KEYSPACE=${{ secrets.ASTRA_DB_KEYSPACE }} \
+            --from-literal=TAVILY_API_KEY=${{ secrets.TAVILY_API_KEY }} \
             --dry-run=client -o yaml | kubectl apply -f -
       
       # Deploy manifests
