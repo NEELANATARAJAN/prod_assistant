@@ -12,6 +12,10 @@ from assistant.utils.model_loader import ModelLoader
 from assistant.evaluation.ragas_evaluation import evaluate_context_precision, evaluate_response_relevancy
 from langchain_mcp_adapters.client import MultiServerMCPClient
 import asyncio
+import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+server_script_path = os.path.join(BASE_DIR, "product_search_server.py")
 
 class AgenticRAG:
     """ Agentic RAG pipeline using LangGraph + MCP Tools (Retriever + Web Search) - CRAG (Corrective RAG)"""
@@ -44,7 +48,8 @@ class AgenticRAG:
             "product_retriever": {
                 "command": "python",
                 "transport": "stdio",
-                "args": ["/Users/neeladnatarajan/DSProjects/LLMOps/hw/prod_assistant/assistant/mcp_server/product_search_server.py"],
+                # "args": ["/Users/neeladnatarajan/DSProjects/LLMOps/hw/prod_assistant/assistant/mcp_server/product_search_server.py"],
+                "args": [server_script_path]
             }
 
         })
